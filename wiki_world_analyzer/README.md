@@ -35,7 +35,7 @@ The analyzer intelligently caches both raw Wikipedia data and processed results,
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/wikipedia-category-analyzer.git
+   git clone https://github.com/farabi1038/https://github.com/farabi1038/implmnt_from_scratchwikipedia-category-analyzer.git
    cd wikipedia-category-analyzer
    ```
 
