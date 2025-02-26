@@ -1,0 +1,13 @@
+# Web application
+Flask>=2.0.0
+
+# API requests
+requests>=2.25.0
+
+# Text processing
+nltk>=3.6.0
+
+# For development (optional)
+pytest>=6.2.0
+flake8>=3.9.0
+black>=21.5b2 
