@@ -1,0 +1,42 @@
+.word-cloud-container {
+    position: relative;
+    min-height: 500px;
+}
+
+#loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.color-box {
+    width: 40px;
+    height: 40px;
+    margin: 5px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+#word-cloud svg {
+    max-width: 100%;
+    height: auto;
+}
+
+.table-responsive {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+#raw-frequencies .table-responsive {
+    height: 500px;
+}
+
+/* Hover effect for words in the cloud */
+#word-cloud text:hover {
+    cursor: pointer;
+    opacity: 0.8;
+    stroke: #333;
+    stroke-width: 0.5px;
+} 

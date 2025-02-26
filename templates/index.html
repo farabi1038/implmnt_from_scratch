@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wikipedia Category Word Cloud</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Wikipedia Category Word Cloud</h1>
+        
+        <div class="card mb-4">
+            <div class="card-body">
+                <form id="analysis-form">
+                    <div class="row align-items-end">
+                        <div class="col-md-5">
+                            <label for="category" class="form-label">Wikipedia Category</label>
+                            <input type="text" class="form-control" id="category" name="category" value="Large_language_models" required>
+                            <div class="form-text">Enter a Wikipedia category name (without "Category:" prefix)</div>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="color-palette" class="form-label">Color Palette</label>
+                            <select class="form-select" id="color-palette">
+                                {% for palette in palettes %}
+                                <option value="{{ palette.name }}">{{ palette.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="view-mode" class="form-label">View Mode</label>
+                            <select class="form-select" id="view-mode">
+                                <option value="cloud">Word Cloud</option>
+                                <option value="raw">Raw Frequencies</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="reset-cache">
+                                <label class="form-check-label" for="reset-cache">
+                                    Reset Cache
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Analyze</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 id="word-cloud-title">Word Cloud</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="show-frequencies">
+                            <label class="form-check-label" for="show-frequencies">Show Frequencies</label>
+                        </div>
+                    </div>
+                    <div class="card-body word-cloud-container">
+                        <div id="word-cloud"></div>
+                        <div id="raw-frequencies" class="d-none">
+                            <div class="table-responsive" style="height: 500px;">
+                                <table class="table table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Rank</th>
+                                            <th>Word</th>
+                                            <th>Frequency</th>
+                                            <th>Percentage</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="raw-frequency-table">
+                                        <tr>
+                                            <td colspan="4" class="text-center">No data available</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div id="loading" class="d-none">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p>Analyzing category... This may take a few minutes.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="stats-content">
+                            <p>No data available. Please analyze a category.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Colors Used</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="color-samples" class="d-flex flex-wrap">
+                            <!-- Color samples will be added here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Word Frequency Table</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Word</th>
+                                <th>Frequency</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="frequency-table">
+                            <tr>
+                                <td colspan="4" class="text-center">No data available</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Store all palettes from the server
+        const allPalettes = {{ palettes|tojson }};
+        let currentPalette = allPalettes[0];
+        
+        // Update color samples display
+        function updateColorSamples() {
+            const colorSamples = document.getElementById('color-samples');
+            colorSamples.innerHTML = '';
+            
+            currentPalette.colors.forEach(color => {
+                const colorBox = document.createElement('div');
+                colorBox.className = 'color-box';
+                colorBox.style.backgroundColor = color;
+                colorBox.title = color;
+                colorSamples.appendChild(colorBox);
+            });
+        }
+        
+        // Initialize with the first palette
+        updateColorSamples();
+        
+        // Handle palette selection
+        document.getElementById('color-palette').addEventListener('change', function() {
+            const selectedPalette = this.value;
+            currentPalette = allPalettes.find(p => p.name === selectedPalette);
+            updateColorSamples();
+            
+            // If we have data, redraw the word cloud
+            if (window.lastResults) {
+                drawWordCloud(window.lastResults.word_frequencies);
+            }
+        });
+        
+        // Handle view mode selection
+        document.getElementById('view-mode').addEventListener('change', function() {
+            toggleViewMode(this.value);
+        });
+        
+        // Handle frequency toggle
+        document.getElementById('show-frequencies').addEventListener('change', function() {
+            if (window.lastResults) {
+                drawWordCloud(window.lastResults.word_frequencies);
+            }
+        });
+        
+        function toggleViewMode(mode) {
+            const wordCloud = document.getElementById('word-cloud');
+            const rawFrequencies = document.getElementById('raw-frequencies');
+            const cloudTitle = document.getElementById('word-cloud-title');
+            const freqToggle = document.getElementById('show-frequencies').parentElement;
+            
+            if (mode === 'cloud') {
+                wordCloud.classList.remove('d-none');
+                rawFrequencies.classList.add('d-none');
+                cloudTitle.textContent = 'Word Cloud' + (window.lastResults ? ': ' + window.lastResults.category : '');
+                freqToggle.classList.remove('d-none');
+            } else {
+                wordCloud.classList.add('d-none');
+                rawFrequencies.classList.remove('d-none');
+                cloudTitle.textContent = 'Raw Frequencies' + (window.lastResults ? ': ' + window.lastResults.category : '');
+                freqToggle.classList.add('d-none');
+                
+                // If we have results, populate the raw frequency table
+                if (window.lastResults) {
+                    updateRawFrequencyTable(window.lastResults.word_frequencies);
+                }
+            }
+        }
+        
+        // Form submission handler
+        document.getElementById('analysis-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const category = document.getElementById('category').value;
+            const resetCache = document.getElementById('reset-cache').checked;
+            
+            // Show loading indicator
+            document.getElementById('loading').classList.remove('d-none');
+            document.getElementById('word-cloud').innerHTML = '';
+            document.getElementById('raw-frequencies').classList.add('d-none');
+            document.getElementById('word-cloud').classList.remove('d-none');
+            
+            // Make the AJAX request
+            const formData = new FormData();
+            formData.append('category', category);
+            formData.append('reset_cache', resetCache);
+            
+            fetch('/analyze', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading indicator
+                document.getElementById('loading').classList.add('d-none');
+                
+                // Store results for later use
+                window.lastResults = data;
+                
+                // Calculate total word count for percentages
+                const totalWordCount = data.word_frequencies.reduce((sum, [_, count]) => sum + count, 0);
+                window.totalWordCount = totalWordCount;
+                
+                // Update title
+                document.getElementById('word-cloud-title').textContent = `Word Cloud: ${data.category}`;
+                
+                // Update stats
+                updateStats(data, totalWordCount);
+                
+                // Update frequency table
+                updateFrequencyTable(data.word_frequencies, totalWordCount);
+                
+                // Update raw frequency table if in raw view mode
+                if (document.getElementById('view-mode').value === 'raw') {
+                    updateRawFrequencyTable(data.word_frequencies, totalWordCount);
+                    toggleViewMode('raw');
+                } else {
+                    // Draw word cloud
+                    drawWordCloud(data.word_frequencies);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('loading').classList.add('d-none');
+                alert('An error occurred while analyzing the category. Please try again.');
+            });
+        });
+        
+        function updateStats(data, totalWordCount) {
+            const statsContent = document.getElementById('stats-content');
+            
+            // Create stats HTML
+            let statsHtml = `
+                <p><strong>Category:</strong> ${data.category}</p>
+                <p><strong>Pages analyzed:</strong> ${data.page_count}</p>
+                <p><strong>Unique words:</strong> ${data.word_frequencies.length}</p>
+                <p><strong>Total word occurrences:</strong> ${totalWordCount.toLocaleString()}</p>
+            `;
+            
+            // Add cache information
+            if (data.cache_stats) {
+                statsHtml += `
+                    <hr>
+                    <p class="text-muted">
+                        <small>
+                            ${data.cache_stats.from_cached_analysis ? '<span class="badge bg-success">From cached analysis</span><br>' : ''}
+                            Categories in cache: ${data.cache_stats.categories_cached}<br>
+                            Pages in cache: ${data.cache_stats.pages_cached}<br>
+                            Analyses in cache: ${data.cache_stats.analyses_cached}
+                        </small>
+                    </p>
+                `;
+            }
+            
+            statsContent.innerHTML = statsHtml;
+        }
+        
+        function updateFrequencyTable(frequencies, totalWordCount) {
+            const tableBody = document.getElementById('frequency-table');
+            tableBody.innerHTML = '';
+            
+            // Show top 50 words
+            const topWords = frequencies.slice(0, 50);
+            
+            topWords.forEach((item, index) => {
+                const [word, count] = item;
+                const percentage = ((count / totalWordCount) * 100).toFixed(2);
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${word}</td>
+                    <td>${count.toLocaleString()}</td>
+                    <td>${percentage}%</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+        
+        function updateRawFrequencyTable(frequencies, totalWordCount) {
+            const tableBody = document.getElementById('raw-frequency-table');
+            tableBody.innerHTML = '';
+            
+            // Show all words in the raw view
+            frequencies.forEach((item, index) => {
+                const [word, count] = item;
+                const percentage = ((count / totalWordCount) * 100).toFixed(2);
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${word}</td>
+                    <td>${count.toLocaleString()}</td>
+                    <td>${percentage}%</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+        
+        function drawWordCloud(frequencies) {
+            // Clear previous word cloud
+            document.getElementById('word-cloud').innerHTML = '';
+            
+            // Get dimensions
+            const container = document.querySelector('.word-cloud-container');
+            const width = container.clientWidth;
+            const height = 500;
+            
+            // Check if we should show frequencies
+            const showFrequencies = document.getElementById('show-frequencies').checked;
+            
+            // Use top 100 words for the cloud
+            const words = frequencies.slice(0, 100).map(([text, size]) => ({
+                text: showFrequencies ? `${text} (${size})` : text,
+                originalText: text,
+                frequency: size,
+                size: 10 + (size * 40 / frequencies[0][1])  // Scale font size
+            }));
+            
+            // Create cloud layout
+            const layout = d3.layout.cloud()
+                .size([width, height])
+                .words(words)
+                .padding(5)
+                .rotate(() => ~~(Math.random() * 2) * 90)
+                .font("Impact")
+                .fontSize(d => d.size)
+                .on("end", draw);
+            
+            layout.start();
+            
+            function draw(words) {
+                const svg = d3.select("#word-cloud").append("svg")
+                    .attr("width", width)
+                    .attr("height", height)
+                    .attr("viewBox", `0 0 ${width} ${height}`)
+                    .attr("preserveAspectRatio", "xMidYMid meet")
+                    .append("g")
+                    .attr("transform", `translate(${width/2},${height/2})`);
+                
+                // Add words
+                svg.selectAll("text")
+                    .data(words)
+                    .enter().append("text")
+                    .style("font-size", d => `${d.size}px`)
+                    .style("font-family", "Impact")
+                    .style("fill", (d, i) => currentPalette.colors[i % currentPalette.colors.length])
+                    .attr("text-anchor", "middle")
+                    .attr("transform", d => `translate(${d.x},${d.y}) rotate(${d.rotate})`)
+                    .text(d => d.text)
+                    .append("title")  // Add tooltip with frequency
+                    .text(d => `${d.originalText}: ${d.frequency} occurrences (${((d.frequency / window.totalWordCount) * 100).toFixed(2)}%)`);
+            }
+        }
+        
+        // Initialize view mode
+        toggleViewMode('cloud');
+        
+        // Automatically analyze the default category when the page loads
+        window.onload = function() {
+            document.getElementById('analysis-form').dispatchEvent(new Event('submit'));
+        };
+    </script>
+</body>
+</html> 
