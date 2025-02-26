@@ -7,7 +7,6 @@ This repository contains an implementation of a Vision Transformer (ViT) model f
 ## **Table of Contents**
 - [Introduction](#introduction)
 - [Project Structure](#project-structure)
-- [Installation](#installation)
 - [Usage](#usage)
 - [Components](#components)
   - [Configuration (`config.py`)](#configuration-configpy)
