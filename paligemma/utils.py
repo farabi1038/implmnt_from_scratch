@@ -9,7 +9,7 @@ import torch
 from safetensors import safe_open
 from transformers import AutoTokenizer
 from paligemma.modeling_paligemma import PaliGemmaForConditionalGeneration
-from siglip.config import PaliGemmaConfig
+from paligemma.config import PaliGemmaConfig
 
 def load_hf_model(model_path: str, device: str) -> Tuple[PaliGemmaForConditionalGeneration, AutoTokenizer]:
     """

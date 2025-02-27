@@ -20,32 +20,32 @@ This implementation provides a modular framework with clear separation between:
 
 ```
 project/
-├── siglip/  # Vision model components
-│   ├── config.py  # Configuration for vision model
-│   └── modeling_siglip.py  # SigLIP implementation
-├── paligemma/  # Language and multimodal components
-│   ├── config.py  # Gemma configuration
-│   ├── modeling_gemma.py  # Gemma language model
-│   └── modeling_paligemma.py  # Multimodal integration
-├── processors/  # Processing utilities
-│   └── processor_paligemma.py  # Input processing for PaLiGemma
-├── utils.py  # Utility functions for model loading
-├── run_paligemma.py  # Example script for model creation
-├── run_paligemma_processor.py  # Example script for processor usage
-└── test_inference.py  # Inference testing script
+├── siglip/                   # Vision model components
+│   ├── config.py             # Configuration for vision model
+│   └── modeling_siglip_*.py  # SigLIP implementation 
+├── gemma/                    # Language model components
+│   ├── config.py             # Gemma configuration
+│   └── modeling_gemma.py     # Gemma language model implementation
+├── paligemma/                # Multimodal integration components
+│   ├── config.py             # PaLiGemma configuration
+│   └── modeling_paligemma.py # Multimodal integration
+├── processors/               # Processing utilities
+│   └── processor_paligemma.py # Input processing for PaLiGemma
+├── utils.py                  # Utility functions for model loading
+├── run_gemma.py              # Example script for model creation
+├── run_processor.py          # Example script for processor usage
+└── test_inference.py         # Inference testing script
 ```
 
 ## Installation
 
 1. Clone the repository:
-
 ```bash
 git clone https://github.com/username/paligemma-implementation.git
 cd paligemma-implementation
 ```
 
 2. Install dependencies:
-
 ```bash
 pip install -r requirements.txt
 ```
@@ -92,13 +92,13 @@ with torch.no_grad():
         pixel_values=inputs["pixel_values"].to("cuda"),
         attention_mask=inputs["attention_mask"].to("cuda")
     )
-
-# Get predicted tokens
-predicted_ids = torch.argmax(outputs["logits"], dim=-1)
-
-# Decode to text
-predicted_text = tokenizer.decode(predicted_ids[0], skip_special_tokens=True)
-print(predicted_text)
+    
+    # Get predicted tokens
+    predicted_ids = torch.argmax(outputs["logits"], dim=-1)
+    
+    # Decode to text
+    predicted_text = tokenizer.decode(predicted_ids[0], skip_special_tokens=True)
+    print(predicted_text)
 ```
 
 ### Running Inference
@@ -106,7 +106,13 @@ print(predicted_text)
 The `test_inference.py` script provides a command-line interface for model inference:
 
 ```bash
-python test_inference.py --model_path=/path/to/model --prompt="What's happening in this image?" --image_file_path=image.jpg --max_tokens_to_generate=100 --temperature=0.8 --do_sample=True
+python test_inference.py \
+    --model_path=/path/to/model \
+    --prompt="What's happening in this image?" \
+    --image_file_path=image.jpg \
+    --max_tokens_to_generate=100 \
+    --temperature=0.8 \
+    --do_sample=True
 ```
 
 ## Model Loading
@@ -126,7 +132,8 @@ model, tokenizer = load_hf_model(
 
 Each module has detailed documentation:
 - [SigLIP README](siglip/README.md) - Vision model documentation
-- [PaLiGemma README](paligemma/README.md) - Language and multimodal model
+- [Gemma README](gemma/README.md) - Language model documentation
+- [PaLiGemma README](paligemma/README.md) - Multimodal integration
 - [Processors README](processors/README.md) - Input processing
 
 ## License
@@ -136,6 +143,10 @@ Each module has detailed documentation:
 ## Citation
 
 If you use this implementation in your research, please cite:
+
+```
+[Citation information for original PaLiGemma model]
+```
 
 ## Acknowledgments
 

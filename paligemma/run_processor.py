@@ -1,4 +1,4 @@
-# run_paligemma_processor.py
+# run_processor.py
 # This script demonstrates how to use the PaLiGemma processor.
 
 import torch
