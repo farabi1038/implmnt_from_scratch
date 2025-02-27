@@ -5,7 +5,7 @@ import torch
 import fire
 from PIL import Image
 from processors.processor_paligemma import PaliGemmaProcessor
-from paligemma.modeling_gemma import KVCache
+from gemma.modeling_gemma import KVCache
 from utils import load_hf_model
 
 def move_inputs_to_device(model_inputs: dict, device: str):

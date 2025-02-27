@@ -1,11 +1,11 @@
-# run_paligemma.py
+# run_gemma.py
 # This script demonstrates how to use the full PaLiGemma model.
 
 import torch
 from PIL import Image
 from transformers import AutoTokenizer
 from siglip.config import PaliGemmaConfig
-from paligemma.config import GemmaConfig
+from gemma.config import GemmaConfig
 from paligemma.modeling_paligemma import PaliGemmaForConditionalGeneration, KVCache
 from processors.processor_paligemma import PaliGemmaProcessor
 

@@ -4,9 +4,9 @@
 import torch
 from torch import nn
 from typing import Optional, Tuple, List
-from siglip.config import PaliGemmaConfig
+from paligemma.config import PaliGemmaConfig
 from siglip.modeling_siglip_vision_model import SiglipVisionModel
-from paligemma.modeling_gemma import GemmaForCausalLM, KVCache
+from gemma.modeling_gemma import GemmaForCausalLM, KVCache
 
 class PaliGemmaMultiModalProjector(nn.Module):
     """

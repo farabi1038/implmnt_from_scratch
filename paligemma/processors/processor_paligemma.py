@@ -5,7 +5,7 @@ from typing import Dict, List, Optional, Union, Tuple, Iterable
 import numpy as np
 from PIL import Image
 import torch
-from siglip.config import PaliGemmaConfig  # Updated import path
+from paligemma.config import PaliGemmaConfig
 
 
 def add_image_tokens_to_prompt(prefix_prompt, bos_token, image_seq_len, image_token):

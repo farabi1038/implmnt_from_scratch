@@ -1,36 +1,27 @@
-# PaLiGemma Model
+# PaLiGemma Multimodal Integration
 
-This directory contains the implementation of the PaLiGemma multimodal model which combines a vision model (SigLIP) with a language model (Gemma).
+This directory contains the implementation of the PaLiGemma multimodal integration components, which combine the SigLIP vision model with the Gemma language model.
 
 ## Overview
 
-PaLiGemma is a vision-language model based on:
-- **Vision Component**: SigLIP Vision Transformer for image understanding
-- **Language Component**: Gemma for text generation
-- **Cross-modal integration**: Projection layer connecting vision and language components
+PaLiGemma is a vision-language model that integrates:
+- **Vision Component**: SigLIP Vision Transformer (in `siglip/` directory)
+- **Language Component**: Gemma language model (in `gemma/` directory)
+- **Cross-modal Integration**: Projection layer connecting vision and language representations
 
-## Model Architecture
+This directory specifically contains the integration components and configuration for the multimodal system.
 
-### Configurations
+## Components
 
-- `config.py`: Defines `GemmaConfig` for configuring the language model components.
-- Configuration parameters include model dimensions, attention heads, layer counts, etc.
+### Configuration (`config.py`)
 
-### Language Model (`modeling_gemma.py`)
-
-The language model implementation includes:
-- `KVCache`: For efficient autoregressive generation
-- `GemmaRMSNorm`: Root Mean Square Layer Normalization
-- `GemmaRotaryEmbedding`: Rotary position embeddings (RoPE)
-- `GemmaMLP`: MLP block in transformer layers
-- `GemmaAttention`: Multi-head attention with grouped-query attention
-- `GemmaDecoderLayer`: Single transformer decoder layer
-- `GemmaModel`: Full sequence model
-- `GemmaForCausalLM`: Language model with LM head
+- `PaliGemmaConfig`: Top-level configuration class for the multimodal model
+- Handles both vision and language model configurations
+- Manages integration parameters like projection dimensions
 
 ### Multimodal Model (`modeling_paligemma.py`)
 
-The multimodal integration:
+The multimodal integration includes:
 - `PaliGemmaMultiModalProjector`: Projects vision features to text embedding space
 - `PaliGemmaForConditionalGeneration`: Main model combining vision and language components
   - Processes images through vision tower
@@ -41,20 +32,19 @@ The multimodal integration:
 ## Key Features
 
 - **Token Merging**: Replaces `<image>` tokens with projected image features
-- **Efficient Generation**: Uses key-value caching for fast autoregressive generation
-- **Rotary Embeddings**: Uses RoPE for better handling of positional information
-- **Grouped-Query Attention**: Optimizes attention computation for large models
+- **Multimodal Context**: Enables the language model to reason about visual content
+- **End-to-End Architecture**: Unified model for vision-language tasks
 
 ## Usage
 
 ```python
 from paligemma.modeling_paligemma import PaliGemmaForConditionalGeneration
-from siglip.config import PaliGemmaConfig
-from paligemma.config import GemmaConfig
+from paligemma.config import PaliGemmaConfig
+from gemma.config import GemmaConfig
 
 # Define configurations
 vision_config = {...}  # SigLIP vision config
-text_config = {...}  # Gemma language model config
+text_config = {...}    # Gemma language model config
 
 # Create PaLiGemma config
 config = PaliGemmaConfig(
@@ -70,8 +60,8 @@ model = PaliGemmaForConditionalGeneration(config)
 
 # Forward pass (example)
 outputs = model(
-    input_ids=input_ids,  # Tokenized prompt with <image> tokens
-    pixel_values=pixel_values,  # Preprocessed image tensors
+    input_ids=input_ids,           # Tokenized prompt with <image> tokens
+    pixel_values=pixel_values,     # Preprocessed image tensors
     attention_mask=attention_mask  # Attention mask for input sequence
 )
 ```
