@@ -16,38 +16,55 @@ def load_hf_model(model_path: str, device: str) -> Tuple[PaliGemmaForConditional
     Load a PaLiGemma model from a HuggingFace model path.
     
     Args:
-        model_path: Path to the HuggingFace model
-        device: Device to load the model onto ('cpu', 'cuda', etc.)
+        model_path: Path to the model directory (local or HF hub ID)
+        device: Device to load the model on ("cpu", "cuda", "mps")
         
     Returns:
         Tuple of (model, tokenizer)
+        
+    Example:
+        model, tokenizer = load_hf_model(
+            "google/paligemma-3b-pt", 
+            device="cuda"
+        )
     """
-    # Load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(model_path, padding_side="right")
-    assert tokenizer.padding_side == "right"
-
-    # Find all the *.safetensors files
-    safetensors_files = glob.glob(os.path.join(model_path, "*.safetensors"))
-
-    # ... and load them one by one in the tensors dictionary
+    # Load the tokenizer from the model path
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    
+    # Get all safetensors files in the model directory
+    # Safetensors is a more secure format for storing model weights
+    safetensors_files = sorted(glob.glob(os.path.join(model_path, "*.safetensors")))
+    
+    # Dictionary to store loaded tensors
     tensors = {}
-    for safetensors_file in safetensors_files:
-        with safe_open(safetensors_file, framework="pt", device="cpu") as f:
+    
+    # Load tensors from each file
+    for tensor_file in safetensors_files:
+        with safe_open(tensor_file, framework="pt", device=device) as f:
+            # Load each tensor from the file and add it to the dictionary
+            # Example: {"model.embed_tokens.weight": tensor([...]), ...}
             for key in f.keys():
                 tensors[key] = f.get_tensor(key)
 
-    # Load the model's config
+    # Load the model's config file
     with open(os.path.join(model_path, "config.json"), "r") as f:
+        # Parse the JSON config file
         model_config_file = json.load(f)
+        
+        # Create a PaliGemmaConfig object from the loaded config
+        # This contains nested configs for vision and language models
         config = PaliGemmaConfig(**model_config_file)
 
     # Create the model using the configuration
+    # This initializes all parameters with random values
     model = PaliGemmaForConditionalGeneration(config).to(device)
 
     # Load the state dict of the model
+    # This replaces random weights with pre-trained weights
     model.load_state_dict(tensors, strict=False)
 
-    # Tie weights
+    # Tie weights between input embeddings and output layer
+    # Important for language models to share vocab embeddings
     model.tie_weights()
 
     return (model, tokenizer) 

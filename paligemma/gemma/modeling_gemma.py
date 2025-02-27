@@ -8,18 +8,32 @@ from typing import Optional, Tuple, List
 from paligemma.config import GemmaConfig
 
 class KVCache():
-    """Key-Value cache for efficient autoregressive generation."""
+    """
+    Key-Value cache for efficient autoregressive generation.
+    
+    During text generation, this cache stores computed key-value pairs
+    to avoid redundant computation when generating each new token.
+    
+    Example usage in generation:
+    1. Initialize empty cache
+    2. Process prompt to get initial tokens
+    3. For each new token:
+       - Only process the new token (not the full sequence)
+       - Use cached key-values from previous tokens
+       - This gives ~N times speedup for generating N tokens
+    """
 
     def __init__(self) -> None:
         self.key_cache: List[torch.Tensor] = []
         self.value_cache: List[torch.Tensor] = []
     
     def num_items(self) -> int:
-        """Returns the number of items in the KV cache."""
+        """Returns the number of items (sequence length) in the KV cache."""
         if len(self.key_cache) == 0:
             return 0
         else:
             # The shape of the key_cache is [Batch_Size, Num_Heads_KV, Seq_Len, Head_Dim]
+            # Example: [1, 1, 10, 256] for 10 cached tokens
             return self.key_cache[0].shape[-2]
 
     def update(
@@ -28,7 +42,26 @@ class KVCache():
         value_states: torch.Tensor,
         layer_idx: int,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Updates the KV cache with new key and value states."""
+        """
+        Updates the KV cache with new key and value states.
+        
+        Args:
+            key_states: New key states to add to cache
+            value_states: New value states to add to cache
+            layer_idx: Index of the transformer layer
+            
+        Returns:
+            Tuple of full key and value states (cached + new)
+            
+        Example:
+            For layer 0 with empty cache:
+            - key_states = tensor of shape [1, 1, 1, 256] (processing 1 new token)
+            - After update: self.key_cache[0] shape is [1, 1, 1, 256]
+            
+            On next token:
+            - key_states = tensor of shape [1, 1, 1, 256] (next token)
+            - After update: self.key_cache[0] shape is [1, 1, 2, 256]
+        """
         if len(self.key_cache) <= layer_idx:
             # If we never added anything to the KV-Cache of this layer, let's create it.
             self.key_cache.append(key_states)
@@ -36,10 +69,11 @@ class KVCache():
         else:
             # ... otherwise we concatenate the new keys with the existing ones.
             # each tensor has shape: [Batch_Size, Num_Heads_KV, Seq_Len, Head_Dim]
+            # Example: Concatenating [1, 1, 5, 256] with [1, 1, 1, 256] → [1, 1, 6, 256]
             self.key_cache[layer_idx] = torch.cat([self.key_cache[layer_idx], key_states], dim=-2)
             self.value_cache[layer_idx] = torch.cat([self.value_cache[layer_idx], value_states], dim=-2)
 
-        # ... and then we return all the existing keys + the new ones.
+        # Return the complete cached sequence for this layer
         return self.key_cache[layer_idx], self.value_cache[layer_idx]
 
 

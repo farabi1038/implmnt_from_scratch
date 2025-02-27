@@ -6,6 +6,7 @@ import numpy as np
 from PIL import Image
 import torch
 from paligemma.config import PaliGemmaConfig
+import torchvision.transforms as T
 
 
 def add_image_tokens_to_prompt(prefix_prompt, bos_token, image_seq_len, image_token):
@@ -96,28 +97,44 @@ class PaliGemmaProcessor:
 
     IMAGE_TOKEN = "<image>"
 
-    def __init__(self, tokenizer, config=None, num_image_tokens=None, image_size=None):
+    def __init__(
+        self, 
+        tokenizer, 
+        num_image_tokens: int = 64,
+        image_size: int = 224,
+        image_mean: List[float] = [0.5, 0.5, 0.5],
+        image_std: List[float] = [0.5, 0.5, 0.5]
+    ):
         """
-        Initialize the processor with a tokenizer and configuration.
+        Initialize the processor with tokenizer and image processing parameters.
         
         Args:
-            tokenizer: A tokenizer for processing text inputs
-            config: PaliGemmaConfig object with model parameters
-            num_image_tokens: Optional override for the number of image tokens
-            image_size: Optional override for image size
+            tokenizer: HuggingFace tokenizer for text processing
+            num_image_tokens: Number of image tokens to inject
+            image_size: Size to resize images to (square)
+            image_mean: Mean values for image normalization (RGB)
+            image_std: Standard deviation values for normalization (RGB)
+            
+        Example:
+            processor = PaliGemmaProcessor(
+                tokenizer=AutoTokenizer.from_pretrained("google/paligemma-3b-pt"),
+                num_image_tokens=64,
+                image_size=224
+            )
         """
-        super().__init__()
-
         self.tokenizer = tokenizer
+        self.num_image_tokens = num_image_tokens
+        self.image_size = image_size
+        self.image_mean = image_mean
+        self.image_std = image_std
         
-        # Either use config or individual parameters
-        if config is not None:
-            self.num_image_tokens = config.num_image_tokens
-            self.image_size = config.image_size
-        else:
-            self.num_image_tokens = num_image_tokens
-            self.image_size = image_size
-
+        # Image preprocessing pipeline
+        self.image_processor = T.Compose([
+            T.Resize((image_size, image_size), interpolation=T.InterpolationMode.BICUBIC),
+            T.ToTensor(),
+            T.Normalize(mean=image_mean, std=image_std)
+        ])
+        
         # Add special tokens to tokenizer
         tokens_to_add = {"additional_special_tokens": [self.IMAGE_TOKEN]}
         tokenizer.add_special_tokens(tokens_to_add)
@@ -136,59 +153,118 @@ class PaliGemmaProcessor:
         tokenizer.add_bos_token = False
         tokenizer.add_eos_token = False
 
-    def __call__(
-        self,
-        text: List[str],
-        images: List[Image.Image],
-        padding: str = "longest",
-        truncation: bool = True,
-    ) -> dict:
+    def add_image_tokens_to_prompt(self, prompt: str, image_token_index: int = 256000) -> str:
         """
-        Process images and text for the PaLiGemma model.
+        Add image tokens to the beginning of a prompt.
+        
+        Args:
+            prompt: Text prompt to add image tokens to
+            image_token_index: Token ID for image token
+            
+        Returns:
+            Prompt with image tokens added
+            
+        Example:
+            Input: "Describe this image:"
+            Output: "<image>Describe this image:"
+            (where <image> is a special token)
+        """
+        # Convert the image token index to a string token representation
+        # The tokenizer will convert this back to the right token ID
+        image_token = self.tokenizer.decode([image_token_index])
+        
+        # Add the image token to the beginning of the prompt
+        # Note: When tokenized, this single token will be replaced with
+        # multiple image embedding tokens from the vision model
+        return f"{image_token}{prompt}"
+
+    def process_images(self, images: List[Image.Image]) -> torch.Tensor:
+        """
+        Process a batch of images.
+        
+        Args:
+            images: List of PIL images
+            
+        Returns:
+            Tensor of processed image tensors
+            
+        Example:
+            Input: [PIL.Image.Image of size 640x480]
+            Output: torch.Tensor of shape [1, 3, 224, 224]
+        """
+        processed_images = []
+        
+        for image in images:
+            # Apply the image preprocessing pipeline:
+            # 1. Resize to square (e.g., 224x224)
+            # 2. Convert to tensor (range [0-1])
+            # 3. Normalize with mean and std
+            processed_image = self.image_processor(image)
+            processed_images.append(processed_image)
+        
+        # Stack into a batch
+        # Result shape: [Batch_Size, 3, Height, Width]
+        # Example: [2, 3, 224, 224] for 2 images
+        return torch.stack(processed_images)
+
+    def __call__(
+        self, 
+        text: List[str], 
+        images: List[Image.Image]
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Process a batch of text prompts and images.
         
         Args:
             text: List of text prompts
             images: List of PIL images
-            padding: Padding strategy for tokenizer
-            truncation: Whether to truncate sequences
             
         Returns:
-            dict: Contains 'pixel_values' tensor and tokenizer outputs
+            Dictionary with processed inputs:
+            - input_ids: Token IDs for text (with image tokens)
+            - pixel_values: Processed image tensors
+            - attention_mask: Attention mask for input sequence
+            
+        Example:
+            Input:
+              text=["Describe this image:"]
+              images=[PIL.Image.Image of size 640x480]
+            
+            Output:
+              {
+                "input_ids": tensor([[256000, 1024, 2048, ...]]),
+                "pixel_values": tensor of shape [1, 3, 224, 224],
+                "attention_mask": tensor([[1, 1, 1, ...]])
+              }
         """
-        assert len(images) == len(text), f"Received {len(images)} images for {len(text)} prompts."
-
-        pixel_values = process_images(
-            images,
-            size=(self.image_size, self.image_size),
-            resample=Image.Resampling.BICUBIC,
-            rescale_factor=1 / 255.0,
-            image_mean=[0.5, 0.5, 0.5],
-            image_std=[0.5, 0.5, 0.5],
-        )
-        # Convert the list of numpy arrays to a single numpy array with shape [Batch_Size, Channel, Height, Width]
-        pixel_values = np.stack(pixel_values, axis=0)
-        # Convert the numpy array to a PyTorch tensor
-        pixel_values = torch.tensor(pixel_values)
-
-        # Prepend a `self.num_image_tokens` number of image tokens to the prompt
-        input_strings = [
-            add_image_tokens_to_prompt(
-                prefix_prompt=prompt,
-                bos_token=self.tokenizer.bos_token,
-                image_seq_len=self.num_image_tokens,
-                image_token=self.IMAGE_TOKEN,
+        if len(text) != len(images):
+            raise ValueError(
+                f"Number of text prompts ({len(text)}) must match "
+                f"number of images ({len(images)})"
             )
-            for prompt in text
-        ]
-
-        # Returns the input_ids and attention_mask as PyTorch tensors
-        inputs = self.tokenizer(
-            input_strings,
+        
+        # Add image tokens to each prompt
+        # This is typically a special token at the beginning of the prompt
+        processed_text = [self.add_image_tokens_to_prompt(t) for t in text]
+        
+        # Tokenize the text prompts
+        # This converts text to token IDs that the model understands
+        encoded_text = self.tokenizer(
+            processed_text,
             return_tensors="pt",
-            padding=padding,
-            truncation=truncation,
+            padding=True,
+            truncation=True
         )
-
-        return_data = {"pixel_values": pixel_values, **inputs}
-
-        return return_data 
+        
+        # Process the images
+        # This resizes, normalizes, and converts to tensors
+        pixel_values = self.process_images(images)
+        
+        # Combine into a single dictionary of inputs
+        inputs = {
+            "input_ids": encoded_text["input_ids"],
+            "attention_mask": encoded_text["attention_mask"],
+            "pixel_values": pixel_values
+        }
+        
+        return inputs 
